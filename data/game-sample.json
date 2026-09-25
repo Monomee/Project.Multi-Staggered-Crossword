@@ -1,0 +1,51 @@
+{
+  "title": "CHỦ ĐỀ: VĂN HÓA DÂN GIO DÂN TỘC VIỆT NAM",
+  "verticalWord": {
+    "keyword": "THỔCẨM",
+    "question": "Hàng dọc (6 chữ cái): Tên của một loại sản phẩm dệt thủ công truyền thống mang đậm bản sắc vùng cao."
+  },
+  "rows": [
+    {
+      "id": 1,
+      "question": "Vùng đất nổi tiếng với chợ phiên và cao nguyên đá?",
+      "answer": "HÀGIANG",
+      "keyCharIndex": 4,
+      "points": 10
+    },
+    {
+      "id": 2,
+      "question": "Nhạc cụ truyền thống làm bằng thân cây nứa, thổi bằng miệng của người H'Mông?",
+      "answer": "KHÈN",
+      "keyCharIndex": 1,
+      "points": 10
+    },
+    {
+      "id": 3,
+      "question": "Lễ hội cầu mùa truyền thống tiêu biểu của đồng bào Tây Nguyên?",
+      "answer": "ĐÂMTRÂU",
+      "keyCharIndex": 6,
+      "points": 10
+    },
+    {
+      "id": 4,
+      "question": "Thành phố sương mù, thủ phủ du lịch của tỉnh Lào Cai?",
+      "answer": "SAPA",
+      "keyCharIndex": 2,
+      "points": 10
+    },
+    {
+      "id": 5,
+      "question": "Loài hoa đặc trưng nở rộ vào cuối thu trên các triền núi đá phía Bắc?",
+      "answer": "TAMAUGIAC",
+      "keyCharIndex": 3,
+      "points": 10
+    },
+    {
+      "id": 6,
+      "question": "Trang phục truyền thống của phụ nữ người Thái có gắn hàng khuy bạc?",
+      "answer": "ÁOCỎM",
+      "keyCharIndex": 4,
+      "points": 10
+    }
+  ]
+}
