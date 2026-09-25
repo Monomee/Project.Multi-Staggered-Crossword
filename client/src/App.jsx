@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Volume2,
@@ -9,11 +9,15 @@ import {
   Smartphone,
   ShieldAlert,
   Trophy,
-  UserCheck,
-  RefreshCw,
-  LogOut
+  LogOut,
+  QrCode,
+  Play,
+  Sparkles,
+  AlertCircle,
+  Copy,
+  Check
 } from 'lucide-react';
-import { useSocket } from './hooks/useSocket';
+import { useSocket, roomStorage } from './hooks/useSocket';
 import { sounds } from './utils/audio';
 
 import { CrosswordBoard } from './components/host/CrosswordBoard';
@@ -24,15 +28,22 @@ import { QuestionViewer } from './components/player/QuestionViewer';
 import { RowBuzzer } from './components/player/RowBuzzer';
 import { VerticalBuzzer } from './components/player/VerticalBuzzer';
 
+import { QRCodeModal } from './components/common/QRCodeModal';
+import { LobbyView } from './components/common/LobbyView';
+
 export default function App() {
   const {
     isConnected,
     gameState,
     playerId,
+    roomCode,
     role,
     playerName,
     currentPlayer,
     verticalAlert,
+    joinError,
+    createRoom,
+    startGame,
     joinRoom,
     leaveRoom,
     buzz,
@@ -46,10 +57,32 @@ export default function App() {
     resetGame
   } = useSocket();
 
-  const [inputName, setInputName] = useState(playerName || '');
-  const [selectedRole, setSelectedRole] = useState(role || 'player');
-  const [hasJoined, setHasJoined] = useState(() => Boolean(sessionStorage.getItem('olympia_user_role')));
+  // Đọc param ?room=XXXX từ URL (Auto-fill room khi quét QR)
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryRoom = (urlParams.get('room') || '').trim().toUpperCase();
+  const lastActiveRoom = queryRoom || roomStorage.getLastRoom() || 'OLYM8';
+  const savedAuth = roomStorage.getAuth(lastActiveRoom);
+  const savedHost = roomStorage.getHost(lastActiveRoom);
+
+  const [inputRoomCode, setInputRoomCode] = useState(() => lastActiveRoom);
+  const [inputName, setInputName] = useState(() => savedAuth?.playerName || playerName || '');
+  const [selectedRole, setSelectedRole] = useState(() => (queryRoom ? 'player' : (savedHost ? 'host' : (savedAuth?.role || 'player'))));
+  const [hasJoined, setHasJoined] = useState(() => Boolean(savedHost || savedAuth));
   const [isMuted, setIsMuted] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+
+  const nameInputRef = useRef(null);
+
+  // Auto-focus vào ô tên khi có param room trên URL
+  useEffect(() => {
+    if (queryRoom) {
+      setInputRoomCode(queryRoom);
+      setSelectedRole('player');
+      setTimeout(() => {
+        nameInputRef.current?.focus();
+      }, 200);
+    }
+  }, [queryRoom]);
 
   // Kích hoạt pháo hoa khi chướng ngại vật được giải
   useEffect(() => {
@@ -68,19 +101,28 @@ export default function App() {
     sounds.setMuted(nextMuted);
   };
 
-  const handleJoin = (e) => {
-    e.preventDefault();
-    // Kích hoạt Web Audio Context ngay trong User Gesture đầu tiên
+  // Host tạo phòng
+  const handleHostCreateRoom = (customCode = null) => {
     sounds.init();
-
-    const finalName = inputName.trim() || (selectedRole === 'host' ? 'Ban Tổ Chức' : 'Thí sinh');
-    joinRoom('OLYMPIA', finalName, selectedRole);
+    createRoom(customCode || inputRoomCode);
     setHasJoined(true);
   };
 
-  const handleSwitchRole = (newRole) => {
-    setSelectedRole(newRole);
-    joinRoom('OLYMPIA', playerName || 'Người tham gia', newRole);
+  // Người dùng tham gia phòng
+  const handleJoin = (e) => {
+    e.preventDefault();
+    sounds.init();
+
+    const targetRoom = inputRoomCode.trim().toUpperCase();
+    const finalName = inputName.trim() || (selectedRole === 'host' ? 'Ban Tổ Chức' : 'Thí sinh');
+
+    if (selectedRole === 'host') {
+      // Nếu host nhập mã phòng, thử kết nối hoặc tạo mới
+      joinRoom(targetRoom, finalName, 'host');
+    } else {
+      joinRoom(targetRoom, finalName, 'player');
+    }
+    setHasJoined(true);
   };
 
   const handleToggleFullScreen = () => {
@@ -91,8 +133,13 @@ export default function App() {
     }
   };
 
-  // MÀN HÌNH ĐĂNG NHẬP / CHỌN VAI TRÒ
-  if (!hasJoined) {
+  const activeRoomCode = roomCode || gameState?.roomCode || inputRoomCode;
+  const roomStatus = gameState?.roomStatus || 'LOBBY';
+
+  // ==========================================
+  // MÀN HÌNH ĐĂNG NHẬP / CHỌN PHÒNG / TẠO PHÒNG
+  // ==========================================
+  if (!hasJoined || joinError) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-[#070b16]">
         <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl glass-panel-elevated space-y-6 shadow-2xl border border-slate-700/80">
@@ -104,15 +151,23 @@ export default function App() {
               Vượt Chướng Ngại Vật
             </h1>
             <p className="text-xs text-slate-400">
-              Hệ thống tương tác thời gian thực chuẩn truyền hình
+              Hệ thống phòng chơi đa thiết bị & mã QR thời gian thực
             </p>
           </div>
+
+          {/* Thông báo lỗi nếu có */}
+          {joinError && (
+            <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <span>{joinError}</span>
+            </div>
+          )}
 
           <form onSubmit={handleJoin} className="space-y-4">
             {/* Chọn vai trò */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Chọn vai trò:
+                Bạn là:
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -143,47 +198,91 @@ export default function App() {
               </div>
             </div>
 
-            {/* Nhập tên */}
+            {/* Nhập mã phòng */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span>Mã phòng thi đấu:</span>
+                {queryRoom && (
+                  <span className="text-[10px] text-emerald-400 font-mono">Đã tự động điền từ QR</span>
+                )}
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={8}
+                value={inputRoomCode}
+                onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
+                placeholder="VD: OLYM8"
+                className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-amber-400 placeholder-slate-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 text-base font-mono font-black tracking-widest uppercase text-center"
+              />
+            </div>
+
+            {/* Nhập tên thí sinh */}
             {selectedRole === 'player' && (
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Tên thí sinh:
+                  Tên của bạn:
                 </label>
                 <input
+                  ref={nameInputRef}
                   type="text"
                   required
                   value={inputName}
                   onChange={(e) => setInputName(e.target.value)}
-                  placeholder="Ví dụ: Hoàng Long, Minh Anh..."
+                  placeholder="Ví dụ: Hoàng, Minh Anh, Tuấn..."
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 text-sm font-semibold"
                 />
               </div>
             )}
 
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
-            >
-              Vào Phòng Thi Đấu
-            </button>
+            {/* Nút hành động */}
+            {selectedRole === 'host' ? (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleHostCreateRoom(inputRoomCode || 'OLYM8')}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-cyan-500/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Tv className="w-4 h-4" />
+                  <span>Tạo phòng "{inputRoomCode || 'OLYM8'}" Mới</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleHostCreateRoom(null)}
+                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Tạo phòng ngẫu nhiên (5 ký tự)
+                </button>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+              >
+                Vào Phòng Thi Đấu
+              </button>
+            )}
           </form>
 
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
             <span className="flex items-center gap-1">
               <Radio className="w-3.5 h-3.5 text-emerald-400" />
-              Socket.io Ready
+              Socket.io Reconnection Ready
             </span>
-            <span>Room: OLYMPIA</span>
+            <span>Room Management Active</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // GIAO DIỆN CHÍNH
+  // ==========================================
+  // GIAO DIỆN CHÍNH KHI ĐÃ VÀO PHÒNG
+  // ==========================================
   return (
     <div className="min-h-screen flex flex-col bg-[#070b16] text-slate-100">
-      {/* 1. TOP HEADER THANH ĐIỀU HƯỚNG */}
+      {/* 1. TOP HEADER CỐ ĐỊNH: MÃ PHÒNG TO RÕ RÀNG & NÚT MỞ MÃ QR */}
       <header className="sticky top-0 z-40 w-full px-4 py-2.5 glass-panel border-b border-slate-800/80 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
@@ -193,33 +292,40 @@ export default function App() {
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-800/70 border border-slate-700 text-[11px] font-mono">
+          {/* Badge Mã Phòng To Rõ */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <span className="text-[10px] text-amber-400/80 font-bold uppercase">PHÒNG:</span>
+            <span className="font-mono font-black text-sm text-amber-300 tracking-wider">
+              {activeRoomCode}
+            </span>
+          </div>
+
+          {/* Nút Mở Mã QR */}
+          <button
+            onClick={() => setShowQRModal(true)}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 border border-slate-700 transition-colors cursor-pointer"
+            title="Mở mã QR mời thí sinh"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Mã QR</span>
+          </button>
+
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-800/70 border border-slate-700 text-[11px] font-mono">
             <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-rose-500 animate-ping'}`} />
             <span className="text-slate-300">{isConnected ? 'Đã kết nối' : 'Đang kết nối lại...'}</span>
           </div>
         </div>
 
-        {/* Chuyển đổi Role & Controls */}
+        {/* Action Buttons bên phải */}
         <div className="flex items-center gap-2">
-          {/* Quick role toggle */}
-          <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-            <button
-              onClick={() => handleSwitchRole('host')}
-              className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                role === 'host' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Host
-            </button>
-            <button
-              onClick={() => handleSwitchRole('player')}
-              className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                role === 'player' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Player
-            </button>
-          </div>
+          {/* Nút xem QR trên mobile */}
+          <button
+            onClick={() => setShowQRModal(true)}
+            className="sm:hidden p-1.5 rounded-lg bg-slate-800 text-amber-400 border border-slate-700"
+            title="Mở mã QR"
+          >
+            <QrCode className="w-4 h-4" />
+          </button>
 
           <button
             onClick={handleToggleMute}
@@ -239,12 +345,12 @@ export default function App() {
 
           <button
             onClick={() => {
-              if (window.confirm('Bạn có chắc chắn muốn rời phòng và bắt đầu lượt chơi mới?')) {
+              if (window.confirm('Bạn có chắc chắn muốn rời phòng thi đấu này?')) {
                 leaveRoom();
               }
             }}
             className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-900/40 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 transition-colors"
-            title="Rời phòng / Chơi mới"
+            title="Rời phòng"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -266,18 +372,26 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. NỘI DUNG CHÍNH THEO VAI TRÒ */}
+      {/* 2. NỘI DUNG CHÍNH: LOBBY HOẶC GAME PLAYING */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
-        {role === 'host' ? (
-          /* MÀN HÌNH DÀNH CHO HOST & MÁY CHIẾU */
+        {roomStatus === 'LOBBY' ? (
+          /* MÀN HÌNH SẢNH CHỜ LOBBY CHO CẢ HOST & PLAYER */
+          <LobbyView
+            roomCode={activeRoomCode}
+            role={role}
+            players={gameState?.players || []}
+            playerName={playerName}
+            onOpenQR={() => setShowQRModal(true)}
+            onStartGame={startGame}
+          />
+        ) : role === 'host' ? (
+          /* MÀN HÌNH BÀN CỜ & ĐIỀU KHIỂN CHO HOST */
           <div className="space-y-6">
-            {/* Bàn cờ chữ so le Staggered Crossword */}
             <CrosswordBoard
               gameState={gameState}
               onSelectRow={selectRow}
             />
 
-            {/* Bảng điều khiển Host & Danh sách bấm chuông */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <BuzzQueueList
                 gameState={gameState}
@@ -297,9 +411,8 @@ export default function App() {
             </div>
           </div>
         ) : (
-          /* MÀN HÌNH DÀNH CHO THÍ SINH (PLAYER) */
+          /* MÀN HÌNH CÂU HỎI & CHUÔNG BẤM CHO THÍ SINH (PLAYER) */
           <div className="max-w-lg mx-auto space-y-6">
-            {/* Thông tin thí sinh & điểm số */}
             <div className="p-4 rounded-2xl glass-panel flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black flex items-center justify-center text-base">
@@ -325,10 +438,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Thẻ xem câu hỏi chống cận */}
             <QuestionViewer gameState={gameState} />
 
-            {/* Nút bấm hàng ngang */}
             <RowBuzzer
               gameState={gameState}
               playerId={playerId}
@@ -336,7 +447,6 @@ export default function App() {
               isEliminated={currentPlayer?.isEliminated}
             />
 
-            {/* Nút đỏ bấm hàng dọc (Chướng Ngại Vật) */}
             <VerticalBuzzer
               gameState={gameState}
               playerId={playerId}
@@ -347,9 +457,17 @@ export default function App() {
         )}
       </main>
 
+      {/* MODAL MÃ QR */}
+      {showQRModal && (
+        <QRCodeModal
+          roomCode={activeRoomCode}
+          onClose={() => setShowQRModal(false)}
+        />
+      )}
+
       {/* FOOTER */}
       <footer className="w-full py-3 text-center text-xs text-slate-600 border-t border-slate-800/40">
-        Olympia Realtime Interactive System • Server-Authoritative Buzzer
+        Olympia Realtime Interactive System • Room Management & QR Code
       </footer>
     </div>
   );

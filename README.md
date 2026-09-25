@@ -12,18 +12,25 @@
 
 ## 2. Các tính năng cốt lõi
 
-### 2.1. Server-Authoritative Buzzer
+### 2.1. Quản lý Phòng chơi & QR Code (Room Management & Reconnection)
+- **Mã phòng 5 ký tự dễ đọc:** Tự động sinh từ bảng chữ cái đã loại bỏ ký tự dễ nhầm lẫn (Bỏ `I`, `O`, `0`, `1`; chỉ dùng `A-Z`, `2-9`). Cho phép Host tùy chọn mã phòng tùy ý (ví dụ: `OLYM8`).
+- **Mã QR & Auto-fill Link:** Host bấm "Mở mã QR", thí sinh dùng camera quét mã hoặc click link `?room=OLYM8` để tự động điền mã phòng và focus sẵn ô nhập tên.
+- **Sảnh chờ (Lobby View):** Hiển thị danh sách thí sinh kèm trạng thái Online/Offline theo thời gian thực. Host bấm "Bắt đầu chơi" để chuyển sang bảng ô chữ.
+- **Khôi phục phiên (Reconnection):** Lưu `playerId` và `roomCode` trong `sessionStorage`. Thí sinh reload hoặc rớt mạng được tự động phục hồi điểm số, trạng thái và bàn cờ hiện tại.
+- **Chống rò rỉ RAM (Anti-Memory Leak):** Khi Host ngắt kết nối, server kích hoạt timer 10 phút. Nếu sau 10 phút Host không reconnect, toàn bộ dữ liệu phòng được giải phóng hoàn toàn khỏi bộ nhớ RAM.
+
+### 2.2. Server-Authoritative Buzzer
 - Timestamp bấm chuông được đóng dấu tuyệt đối tại Server bằng `Date.now()`.
 - Thí sinh đầu tiên đạt `deltaMs = 0`, các thí sinh tiếp theo tính chính xác độ trễ `+X ms`.
-- Chống double buzz, chống spam touch ở mobile với debounce 1000ms.
+- Chống spam touch ngay tại Server (rate-limiting 300ms) và drop packet nếu đã có tên trong hàng đợi.
 
-### 2.2. Thuật toán Render Bàn Cờ Ô Chữ So Le (Staggered Crossword)
+### 2.3. Thuật toán Render Bàn Cờ Ô Chữ So Le (Staggered Crossword)
 - Sử dụng CSS Grid với trục chuẩn `COL_ANCHOR = 12`.
 - Mỗi ô chữ của hàng ngang được căn vị trí: `startCol = COL_ANCHOR - keyCharIndex`.
 - Ô tại `keyCharIndex` được làm nổi bật với hiệu ứng phát sáng đặc biệt.
 - Hiệu ứng 3D flip card khi hàng ngang được Host mở.
 
-### 2.3. Ưu tiên Hàng Dọc (Interrupt Priority) & Án phạt Loại (Permadeath)
+### 2.4. Ưu tiên Hàng Dọc (Interrupt Priority) & Án phạt Loại (Permadeath)
 - Khi có thí sinh bấm chuông Hàng Dọc (Chướng Ngại Vật), còi báo động khẩn cấp lập tức phát và hiển thị trên màn hình Host.
 - Chuông hàng ngang tạm thời bị khóa.
 - Nếu Host xác nhận **Sai**: Thí sinh bị loại vĩnh viễn khỏi phần thi (`isEliminated = true`), màn hình chuyển sang xám xịt và toàn bộ nút bấm bị vô hiệu hóa.
@@ -65,9 +72,15 @@ npm run dev
 ## 4. Kiểm thử tự động (Unit Test & E2E Simulation)
 ```bash
 cd server
-# Chạy Unit Test State Machine & Buzzer
+# 1. Chạy Unit Test State Machine & Buzzer
 node test/engine.test.js
 
-# Chạy E2E Socket Flow Simulation
+# 2. Chạy Unit Test RoomManager & Reconnection
+node test/roomManager.test.js
+
+# 3. Chạy E2E Socket Flow Simulation
 node test/simulation.js
+
+# 4. Chạy E2E Acceptance Criteria Test (Tạo phòng OLYM8, QR link, Reconnect, Anti-Leak)
+node test/room_e2e_acceptance.test.js
 ```

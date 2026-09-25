@@ -6,7 +6,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { ObstacleEngine } from './games/ObstacleEngine.js';
+import { RoomManager } from './core/RoomManager.js';
 import { registerSocketHandlers } from './socket/handlers.js';
 
 const app = express();
@@ -38,7 +38,6 @@ const corsOriginChecker = (origin, callback) => {
     return callback(null, true);
   }
 
-  // Mặc định cho phép trong môi trường phát triển
   return callback(null, true);
 };
 
@@ -55,6 +54,7 @@ app.use(express.json());
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
+    activeRooms: roomManager.rooms.size,
     uptime: process.uptime(),
     timestamp: Date.now()
   });
@@ -70,8 +70,8 @@ const io = new Server(server, {
   transports: ['websocket', 'polling']
 });
 
-const engine = new ObstacleEngine();
-registerSocketHandlers(io, engine);
+const roomManager = new RoomManager();
+registerSocketHandlers(io, roomManager);
 
 // Render tự động cấp cổng qua biến môi trường process.env.PORT
 const PORT = process.env.PORT || 3001;
