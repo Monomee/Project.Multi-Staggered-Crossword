@@ -1,8 +1,11 @@
 {
   "title": "CHỦ ĐỀ: BƯỚC NGOẶT ĐỔI MỚI VÀ PHÁT TRIỂN KINH TẾ",
   "secretImage": {
-    "url": "https://picsum.photos/1200/800",
-    "grid": { "cols": 3, "rows": 2 }
+    "url": "./data/manh-ghep.jpg",
+    "grid": {
+      "cols": 3,
+      "rows": 2
+    }
   },
   "verticalWord": {
     "keyword": "PHÙHỢP",

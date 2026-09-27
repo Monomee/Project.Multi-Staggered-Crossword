@@ -236,8 +236,93 @@ async function runFullAcceptanceTest() {
   console.assert(hostState !== null, 'Host reconnect thành công');
   console.log('✓ [CHỐNG RÒ RỈ RAM ĐẠT] Host reconnect với đúng hostToken, timer dọn dẹp đã được hủy an toàn.');
 
+  // =========================================================================
+  // TIÊU CHÍ 7: HOST OFFLINE NOTIFICATION, RECONNECT VÀ TERMINATE ROOM (OLYM1)
+  // =========================================================================
+  console.log('\n--- TEST 7: HOST RECONNECT VÀ TERMINATE ROOM (OLYM1) ---');
+  // 1. Host tạo phòng OLYM1
+  const host1Socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+  await new Promise(r => setTimeout(r, 200));
+
+  const olym1CreatedPromise = new Promise(resolve => {
+    host1Socket.once('room_created', data => resolve(data));
+  });
+  host1Socket.emit('host:create_room', { customRoomCode: 'OLYM1' });
+  const olym1Data = await olym1CreatedPromise;
+  const olym1HostToken = olym1Data.hostToken;
+  console.assert(olym1Data.roomCode === 'OLYM1', 'Tạo phòng OLYM1 thành công');
+  console.log('✓ Host tạo phòng OLYM1 thành công.');
+
+  // Thí sinh tham gia phòng OLYM1
+  const playerOlym1Socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+  await new Promise(r => setTimeout(r, 200));
+  playerOlym1Socket.emit('join_room', {
+    roomCode: 'OLYM1',
+    playerName: 'Thí sinh Olym1',
+    playerId: 'p_olym1',
+    role: 'player'
+  });
+  await new Promise(r => setTimeout(r, 200));
+
+  // 2. Host ngắt kết nối socket Host -> Thí sinh nhận thông báo Host offline
+  const playerHostOfflinePromise = new Promise(resolve => {
+    playerOlym1Socket.once('host:status_changed', status => resolve(status));
+  });
+  host1Socket.disconnect();
+  const offlineStatus = await playerHostOfflinePromise;
+  console.assert(offlineStatus.isOnline === false, 'Thí sinh phải nhận được thông báo Host offline');
+  console.log('✓ [HOST STATUS ĐẠT] Thí sinh nhận thông báo Host offline khi socket Host ngắt kết nối.');
+
+  // 3. Host dùng đúng hostToken reconnect lại qua host:reconnect -> Timer bị hủy, thí sinh nhận thông báo Host online, Host nhận đủ state dở dang
+  const host1ReconSocket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+  await new Promise(r => setTimeout(r, 200));
+
+  const playerHostOnlinePromise = new Promise(resolve => {
+    playerOlym1Socket.once('host:status_changed', status => resolve(status));
+  });
+  const hostReconSuccessPromise = new Promise(resolve => {
+    host1ReconSocket.once('host:reconnect_success', data => resolve(data));
+  });
+  const hostSyncStatePromise = new Promise(resolve => {
+    host1ReconSocket.once('sync_game_state', state => resolve(state));
+  });
+
+  host1ReconSocket.emit('host:reconnect', {
+    roomCode: 'OLYM1',
+    hostToken: olym1HostToken
+  });
+
+  const [onlineStatus, reconSuccess, hostGameState] = await Promise.all([
+    playerHostOnlinePromise,
+    hostReconSuccessPromise,
+    hostSyncStatePromise
+  ]);
+
+  console.assert(onlineStatus.isOnline === true, 'Thí sinh phải nhận được thông báo Host online trở lại');
+  console.assert(reconSuccess.roomCode === 'OLYM1', 'Host nhận xác nhận reconnect thành công');
+  console.assert(hostGameState.roomCode === 'OLYM1', 'Host nhận đủ state dở dang của phòng');
+  console.log('✓ [HOST RECONNECT ĐẠT] Host reconnect bằng hostToken thành công, thí sinh nhận thông báo Host online và Host nhận đủ state.');
+
+  // 4. Host gửi lệnh terminate_room -> Tất cả thí sinh nhận event room:terminated, phòng bị xóa khỏi Map server
+  const playerTerminatedPromise = new Promise(resolve => {
+    playerOlym1Socket.once('room:terminated', data => resolve(data));
+  });
+
+  host1ReconSocket.emit('host:terminate_room', {
+    roomCode: 'OLYM1',
+    hostToken: olym1HostToken
+  });
+
+  const termData = await playerTerminatedPromise;
+  console.assert(termData.roomCode === 'OLYM1', 'Thí sinh nhận đúng event room:terminated');
+  console.assert(termData.message === 'Host đã kết thúc phòng chơi!', 'Thông báo phòng kết thúc đúng');
+  console.log('✓ [ROOM TERMINATED ĐẠT] Tất cả thí sinh nhận event room:terminated và phòng bị xóa khỏi máy chủ.');
+
+  playerOlym1Socket.disconnect();
+  host1ReconSocket.disconnect();
+
   console.log('\n=================================================================');
-  console.log('🎉 TẤT CẢ 6 KIỂM THỬ BẢO MẬT & NGHIỆM THU ĐÃ ĐẠT 100%! KHÔNG LỖ HỔNG!');
+  console.log('🎉 TẤT CẢ 7 KIỂM THỬ BẢO MẬT & NGHIỆM THU ĐÃ ĐẠT 100%! KHÔNG LỖ HỔNG!');
   console.log('=================================================================');
 
   p1ReconSocket.disconnect();

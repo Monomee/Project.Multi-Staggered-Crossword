@@ -6,8 +6,13 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { RoomManager } from './core/RoomManager.js';
 import { registerSocketHandlers } from './socket/handlers.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +54,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/data', express.static(path.resolve(__dirname, '../../data')));
 
 // API health check
 app.get('/health', (req, res) => {

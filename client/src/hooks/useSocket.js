@@ -40,6 +40,28 @@ export const roomStorage = {
       localStorage.setItem('olym_last_room', code.toUpperCase());
     } catch {}
   },
+  getHostSession() {
+    try {
+      const raw = localStorage.getItem('olym_host_session');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+  setHostSession(session) {
+    try {
+      if (session) {
+        localStorage.setItem('olym_host_session', JSON.stringify(session));
+      } else {
+        localStorage.removeItem('olym_host_session');
+      }
+    } catch {}
+  },
+  clearHostSession() {
+    try {
+      localStorage.removeItem('olym_host_session');
+    } catch {}
+  },
   clear(code) {
     try {
       if (code) {
@@ -47,6 +69,10 @@ export const roomStorage = {
         localStorage.removeItem(`olym_host_${code.toUpperCase()}`);
       }
       localStorage.removeItem('olym_last_room');
+      const session = this.getHostSession();
+      if (session && (!code || session.roomCode === code?.toUpperCase())) {
+        localStorage.removeItem('olym_host_session');
+      }
     } catch {}
   },
   getLastRoom() {
@@ -98,6 +124,8 @@ export function useSocket() {
   const [playerName, setPlayerName] = useState(() => initialAuth?.playerName || '');
   const [verticalAlert, setVerticalAlert] = useState(null);
   const [joinError, setJoinError] = useState(null);
+  const [hostOnline, setHostOnline] = useState(true);
+  const [roomTerminatedModal, setRoomTerminatedModal] = useState(null);
 
   const wakeLockRef = useRef(null);
 
@@ -156,11 +184,17 @@ export function useSocket() {
 
       // Tự động khôi phục phiên (Reconnection) nếu có session phòng lưu trong localStorage
       const activeCode = roomCode || initialRoom;
+      const hostSession = roomStorage.getHostSession();
       if (activeCode) {
         const savedAuth = roomStorage.getAuth(activeCode);
         const savedHost = roomStorage.getHost(activeCode);
 
-        if (savedHost?.hostToken) {
+        if (hostSession?.hostToken && hostSession.roomCode === activeCode) {
+          s.emit('host:reconnect', {
+            roomCode: activeCode,
+            hostToken: hostSession.hostToken
+          });
+        } else if (savedHost?.hostToken) {
           s.emit('join_room', {
             roomCode: activeCode,
             role: 'host',
@@ -186,10 +220,44 @@ export function useSocket() {
       const code = newCode.toUpperCase();
       setRoomCode(code);
       setRole('host');
+      setHostOnline(true);
       if (hostToken) {
         roomStorage.setHost(code, { hostToken });
+        roomStorage.setHostSession({ roomCode: code, hostToken });
       }
       setJoinError(null);
+    });
+
+    s.on('host:status_changed', ({ isOnline }) => {
+      setHostOnline(Boolean(isOnline));
+    });
+
+    s.on('host:reconnect_success', ({ roomCode: recCode, hostToken: recToken }) => {
+      const code = recCode.toUpperCase();
+      setRoomCode(code);
+      setRole('host');
+      setHostOnline(true);
+      if (recToken) {
+        roomStorage.setHost(code, { hostToken: recToken });
+        roomStorage.setHostSession({ roomCode: code, hostToken: recToken });
+      }
+      setJoinError(null);
+    });
+
+    s.on('host:reconnect_failed', ({ message }) => {
+      setJoinError(message || 'Khôi phục phiên Host thất bại!');
+      roomStorage.clearHostSession();
+    });
+
+    s.on('room:terminated', ({ roomCode: termCode, message }) => {
+      sounds.playWrong();
+      setRoomTerminatedModal({
+        isOpen: true,
+        message: message || 'Host đã kết thúc phòng chơi!'
+      });
+      roomStorage.clear(termCode);
+      roomStorage.clearHostSession();
+      setGameState(null);
     });
 
     s.on('player_authenticated', ({ roomCode: authRoom, playerId: authId, playerSecret }) => {
@@ -399,6 +467,42 @@ export function useSocket() {
     socket.emit('host:reset_game', { roomCode, hostToken: hostData?.hostToken });
   }, [socket, roomCode]);
 
+  // Host khôi phục phiên phòng chơi (Host Reconnection)
+  const reconnectHost = useCallback((targetCode = null, token = null) => {
+    if (!socket) return;
+    setJoinError(null);
+    const hostSession = roomStorage.getHostSession();
+    const c = (targetCode || hostSession?.roomCode || roomCode || '').trim().toUpperCase();
+    const t = token || hostSession?.hostToken || roomStorage.getHost(c)?.hostToken;
+    if (!c || !t) {
+      setJoinError('Không tìm thấy thông tin phiên Host hợp lệ!');
+      return;
+    }
+    socket.emit('host:reconnect', { roomCode: c, hostToken: t });
+  }, [socket, roomCode]);
+
+  // Host kết thúc và hủy phòng chơi (Room Termination)
+  const terminateRoom = useCallback((targetCode = null, token = null) => {
+    if (!socket) return;
+    const hostSession = roomStorage.getHostSession();
+    const c = (targetCode || hostSession?.roomCode || roomCode || '').trim().toUpperCase();
+    const t = token || hostSession?.hostToken || roomStorage.getHost(c)?.hostToken;
+    socket.emit('host:terminate_room', { roomCode: c, hostToken: t });
+    roomStorage.clearHostSession();
+    roomStorage.clear(c);
+    setGameState(null);
+    setRoomCode('');
+    setRole('player');
+  }, [socket, roomCode]);
+
+  // Đóng modal kết thúc phòng
+  const closeTerminatedModal = useCallback(() => {
+    setRoomTerminatedModal(null);
+    setGameState(null);
+    setRoomCode('');
+    setRole('player');
+  }, []);
+
   const currentPlayer = gameState?.players?.find(p => p.id === playerId) || null;
 
   return {
@@ -413,10 +517,15 @@ export function useSocket() {
     verticalAlert,
     joinError,
     setJoinError,
+    hostOnline,
+    roomTerminatedModal,
+    closeTerminatedModal,
     createRoom,
     startGame,
     joinRoom,
     leaveRoom,
+    reconnectHost,
+    terminateRoom,
     buzz,
     selectRow,
     toggleBuzzer,

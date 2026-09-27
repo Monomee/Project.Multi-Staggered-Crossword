@@ -60,6 +60,34 @@ export function registerSocketHandlers(io, roomManager) {
       console.log(`[Socket] Host tạo phòng ${room.roomCode} với hostToken an toàn.`);
     });
 
+    // 1b. Khôi phục phiên Host (Host Reconnection)
+    socket.on('host:reconnect', ({ roomCode, hostToken }) => {
+      const code = (roomCode || '').trim().toUpperCase();
+      const room = roomManager.getRoom(code);
+
+      if (!room || room.hostToken !== hostToken) {
+        socket.emit('host:reconnect_failed', { message: 'Phòng đã hết hạn hoặc token không hợp lệ!' });
+        return;
+      }
+
+      const res = roomManager.handleHostReconnect(code, hostToken, socket.id);
+      if (!res.success) {
+        socket.emit('host:reconnect_failed', { message: res.error });
+        return;
+      }
+
+      socket.data.roomCode = code;
+      socket.data.role = 'host';
+      socket.data.hostToken = hostToken;
+      socket.join(code);
+
+      socket.emit('host:reconnect_success', { roomCode: code, hostToken });
+      socket.emit('sync_game_state', roomManager.getFullRoomState(code));
+      io.to(code).emit('host:status_changed', { isOnline: true });
+      broadcastSync(code);
+      console.log(`[Socket] Host khôi phục phiên phòng ${code} thành công.`);
+    });
+
     // 2. Tham gia phòng chơi (Host reconnect xác thực HostToken, Player join/reconnect xác thực PlayerSecret)
     socket.on('join_room', ({ roomCode, playerName, role = 'player', playerId, playerSecret, hostToken }) => {
       const code = (roomCode || socket.data.roomCode || '').trim().toUpperCase();
@@ -88,6 +116,7 @@ export function registerSocketHandlers(io, roomManager) {
         socket.data.hostToken = tokenToVerify;
         socket.join(code);
         socket.emit('sync_game_state', roomManager.getFullRoomState(code));
+        io.to(code).emit('host:status_changed', { isOnline: true });
         console.log(`[Socket] Host xác thực thành công và kết nối phòng ${code}`);
       } else {
         // Thí sinh gia nhập hoặc phục hồi phiên
@@ -232,11 +261,32 @@ export function registerSocketHandlers(io, roomManager) {
       });
     }));
 
+    // 4b. Host kết thúc và đóng phòng chơi
+    socket.on('host:terminate_room', ({ roomCode, hostToken } = {}) => {
+      const code = (roomCode || socket.data.roomCode || '').trim().toUpperCase();
+      const token = hostToken || socket.data.hostToken;
+      const room = roomManager.getRoom(code);
+
+      if (!room || room.hostToken !== token) {
+        socket.emit('action_error', { message: 'Quyền điều khiển bị từ chối: Token Host không hợp lệ!' });
+        return;
+      }
+
+      console.log(`[Socket] Host yêu cầu đóng và kết thúc phòng ${code}`);
+      io.to(code).emit('room:terminated', {
+        roomCode: code,
+        message: 'Host đã kết thúc phòng chơi!'
+      });
+
+      roomManager.deleteRoom(code);
+    });
+
     // 5. Xử lý ngắt kết nối (Disconnect)
     socket.on('disconnect', () => {
       if (socket.data.role === 'host') {
         const room = roomManager.handleHostDisconnect(socket.id);
         if (room) {
+          io.to(room.roomCode).emit('host:status_changed', { isOnline: false });
           console.log(`[Socket] Host phòng ${room.roomCode} đã ngắt kết nối.`);
         }
       } else {

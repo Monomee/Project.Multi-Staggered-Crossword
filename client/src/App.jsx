@@ -15,7 +15,10 @@ import {
   Sparkles,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  Power,
+  AlertTriangle,
+  AlertOctagon
 } from 'lucide-react';
 import { useSocket, roomStorage } from './hooks/useSocket';
 import { sounds } from './utils/audio';
@@ -43,10 +46,16 @@ export default function App() {
     currentPlayer,
     verticalAlert,
     joinError,
+    setJoinError,
+    hostOnline,
+    roomTerminatedModal,
+    closeTerminatedModal,
     createRoom,
     startGame,
     joinRoom,
     leaveRoom,
+    reconnectHost,
+    terminateRoom,
     buzz,
     selectRow,
     toggleBuzzer,
@@ -64,6 +73,7 @@ export default function App() {
   const lastActiveRoom = queryRoom || roomStorage.getLastRoom() || 'OLYM8';
   const savedAuth = roomStorage.getAuth(lastActiveRoom);
   const savedHost = roomStorage.getHost(lastActiveRoom);
+  const hostSession = roomStorage.getHostSession();
 
   const [inputRoomCode, setInputRoomCode] = useState(() => lastActiveRoom);
   const [inputName, setInputName] = useState(() => savedAuth?.playerName || playerName || '');
@@ -71,6 +81,7 @@ export default function App() {
   const [hasJoined, setHasJoined] = useState(() => Boolean(savedHost || savedAuth));
   const [isMuted, setIsMuted] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showTerminateModal, setShowTerminateModal] = useState(false);
 
   const nameInputRef = useRef(null);
 
@@ -155,6 +166,46 @@ export default function App() {
               Hệ thống phòng chơi đa thiết bị & mã QR thời gian thực
             </p>
           </div>
+
+          {/* Banner khôi phục phiên Host nếu phát hiện session đang diễn ra */}
+          {hostSession?.roomCode && (
+            <div className="p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-400 text-amber-200 shadow-xl space-y-3">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 animate-bounce" />
+                <span>
+                  Bạn đang có phòng <strong className="font-mono text-base font-black text-amber-300 uppercase">{hostSession.roomCode}</strong> đang diễn ra!
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Bạn có thể tiếp tục điều khiển phòng thi đấu này hoặc hủy bỏ hoàn toàn phòng để giải phóng máy chủ.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.init();
+                    reconnectHost(hostSession.roomCode, hostSession.hostToken);
+                    setHasJoined(true);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Tiếp tục làm Host</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Bạn có chắc chắn muốn hủy bỏ phòng ${hostSession.roomCode}?`)) {
+                      terminateRoom(hostSession.roomCode, hostSession.hostToken);
+                    }
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-slate-900/90 hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/40 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>Hủy bỏ phòng</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Thông báo lỗi nếu có */}
           {joinError && (
@@ -355,8 +406,33 @@ export default function App() {
           >
             <LogOut className="w-4 h-4" />
           </button>
+
+          {/* Nút màu đỏ: Kết thúc & Đóng phòng (dành riêng cho Host) */}
+          {role === 'host' && (
+            <button
+              onClick={() => setShowTerminateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-600/30 border border-rose-400 active:scale-95 transition-all cursor-pointer"
+              title="Đóng phòng thi đấu và kick thí sinh"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Đóng Phòng</span>
+            </button>
+          )}
         </div>
       </header>
+
+      {/* BANNER THÔNG BÁO CHO PLAYER KHI HOST MẤT KẾT NỐI */}
+      {role === 'player' && !hostOnline && (
+        <div className="w-full bg-amber-500 text-slate-950 px-4 py-2.5 flex items-center justify-between text-xs sm:text-sm font-black sticky top-12 z-30 shadow-lg animate-pulse border-b border-amber-600">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-slate-950 flex-shrink-0 animate-bounce" />
+            <span>Host đang mất kết nối, hệ thống đang chờ Host quay lại...</span>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider bg-black/20 text-slate-950 px-2 py-0.5 rounded font-mono font-bold">
+            Đang chờ Host
+          </span>
+        </div>
+      )}
 
       {/* BANNER CẢNH BÁO TOÀN CỤC KHI CÓ NGƯỜI BẤM HÀNG DỌC */}
       {verticalAlert && (
@@ -470,6 +546,81 @@ export default function App() {
           roomCode={activeRoomCode}
           onClose={() => setShowQRModal(false)}
         />
+      )}
+
+      {/* MODAL XÁC NHẬN ĐÓNG PHÒNG DÀNH CHO HOST */}
+      {showTerminateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border-2 border-rose-500/80 shadow-2xl space-y-5 animate-scale-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 rounded-2xl bg-rose-500/20 border border-rose-500/40">
+                <AlertOctagon className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black uppercase text-white tracking-wider">
+                  Xác Nhận Đóng Phòng
+                </h3>
+                <p className="text-xs text-slate-400">Hành động này không thể hoàn tác</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Bạn có chắc chắn muốn đóng phòng chơi này và kick tất cả thí sinh? Toàn bộ dữ liệu phòng thi đấu sẽ được dọn dẹp sạch sẽ khỏi máy chủ.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowTerminateModal(false)}
+                className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTerminateModal(false);
+                  terminateRoom();
+                  setHasJoined(false);
+                }}
+                className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-600/30 active:scale-95 transition-all cursor-pointer"
+              >
+                Xác nhận đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÔNG BÁO CHO THÍ SINH KHI PHÒNG BỊ HOST ĐÓNG */}
+      {roomTerminatedModal?.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-slate-900 border-2 border-amber-500/80 shadow-2xl space-y-5 text-center animate-scale-in">
+            <div className="w-14 h-14 mx-auto rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 animate-bounce" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-black uppercase text-white tracking-wider">
+                Phòng Thi Đấu Đã Kết Thúc
+              </h3>
+              <p className="text-sm text-slate-300">
+                {roomTerminatedModal.message || 'Host đã kết thúc phòng chơi!'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                closeTerminatedModal();
+                setHasJoined(false);
+              }}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+            >
+              OK - Về Trang Chủ
+            </button>
+          </div>
+        </div>
       )}
 
       {/* FOOTER */}

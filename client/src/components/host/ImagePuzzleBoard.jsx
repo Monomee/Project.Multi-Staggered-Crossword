@@ -8,7 +8,11 @@ import { Eye, Image as ImageIcon } from 'lucide-react';
  * Khi hàng dọc được giải, toàn bộ 6 ô che sẽ được mở.
  */
 export function ImagePuzzleBoard({ secretImage, revealedTiles = [] }) {
-  const imageUrl = secretImage?.url || 'https://picsum.photos/1200/800';
+  let rawUrl = secretImage?.url || '/data/manh-ghep.jpg';
+  if (rawUrl.startsWith('./data/')) {
+    rawUrl = rawUrl.replace('./data/', '/data/');
+  }
+  const imageUrl = rawUrl;
   const cols = secretImage?.grid?.cols || 3;
   const rows = secretImage?.grid?.rows || 2;
   const total = cols * rows;
@@ -33,6 +37,10 @@ export function ImagePuzzleBoard({ secretImage, revealedTiles = [] }) {
         <img
           src={imageUrl}
           alt="Secret Puzzle"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = 'https://picsum.photos/1200/800';
+          }}
           className="absolute inset-0 w-full h-full object-cover select-none"
         />
 
