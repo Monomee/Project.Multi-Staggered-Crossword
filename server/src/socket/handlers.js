@@ -174,8 +174,8 @@ export function registerSocketHandlers(io, roomManager) {
       room.gameEngine.toggleRowBuzzer(isOpen);
     }));
 
-    socket.on('host:judge_result', withHostAuth((room, { playerId, type, isCorrect }) => {
-      const res = room.gameEngine.judgeResult({ playerId, type, isCorrect });
+    socket.on('host:judge_result', withHostAuth((room, { playerId, type, isCorrect, rowId }) => {
+      const res = room.gameEngine.judgeResult({ playerId, type, isCorrect, rowId });
       if (res.success) {
         if (type === 'VERTICAL' && !isCorrect) {
           io.to(room.roomCode).emit('game:player_eliminated', { playerId });
@@ -185,6 +185,10 @@ export function registerSocketHandlers(io, roomManager) {
             answer: res.row.answer
           });
         }
+        // Phát sự kiện cập nhật các ô mảnh ghép hình ảnh bí mật
+        io.to(room.roomCode).emit('game:tiles_updated', {
+          revealedTiles: Array.from(room.gameEngine.revealedTiles)
+        });
       }
     }));
 
@@ -207,16 +211,25 @@ export function registerSocketHandlers(io, roomManager) {
             answer: row.answer
           });
         }
+        io.to(room.roomCode).emit('game:tiles_updated', {
+          revealedTiles: Array.from(room.gameEngine.revealedTiles)
+        });
       }
     }));
 
     socket.on('host:reveal_vertical', withHostAuth((room) => {
       room.gameEngine.revealVertical();
+      io.to(room.roomCode).emit('game:tiles_updated', {
+        revealedTiles: Array.from(room.gameEngine.revealedTiles)
+      });
     }));
 
     socket.on('host:reset_game', withHostAuth((room) => {
       room.gameEngine.resetGame();
       room.status = 'LOBBY';
+      io.to(room.roomCode).emit('game:tiles_updated', {
+        revealedTiles: []
+      });
     }));
 
     // 5. Xử lý ngắt kết nối (Disconnect)

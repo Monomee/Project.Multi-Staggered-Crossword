@@ -1,50 +1,60 @@
 {
-  "title": "CHỦ ĐỀ: VĂN HÓA DÂN GIO DÂN TỘC VIỆT NAM",
+  "title": "CHỦ ĐỀ: BƯỚC NGOẶT ĐỔI MỚI VÀ PHÁT TRIỂN KINH TẾ",
+  "secretImage": {
+    "url": "https://picsum.photos/1200/800",
+    "grid": { "cols": 3, "rows": 2 }
+  },
   "verticalWord": {
-    "keyword": "THỔCẨM",
-    "question": "Hàng dọc (6 chữ cái): Tên của một loại sản phẩm dệt thủ công truyền thống mang đậm bản sắc vùng cao."
+    "keyword": "PHÙHỢP",
+    "question": "HÀNG DỌC (6 chữ cái): Yếu tố cốt lõi trong đường lối chính sách của Đảng và Nhà nước, đòi hỏi quy luật kinh tế và quan hệ sản xuất phải luôn tương thích với thực tiễn phát triển?"
   },
   "rows": [
     {
       "id": 1,
-      "question": "Vùng đất nổi tiếng với chợ phiên và cao nguyên đá?",
-      "answer": "HÀGIANG",
-      "keyCharIndex": 4,
+      "question": "Hình thức phân phối hàng hóa, nhu yếu phẩm đặc trưng nhất của thời kỳ bao cấp trước năm 1986 là gì? (8 chữ cái)",
+      "answer": "TEMPHIẾU",
+      "keyCharIndex": 3,
+      "revealsTileIndex": 0,
       "points": 10
     },
     {
       "id": 2,
-      "question": "Nhạc cụ truyền thống làm bằng thân cây nứa, thổi bằng miệng của người H'Mông?",
-      "answer": "KHÈN",
-      "keyCharIndex": 1,
+      "question": "Quyền năng cơ bản của công dân hoặc pháp nhân đối với tài sản, bao gồm quyền chiếm hữu, sử dụng và định đoạt? (5 chữ cái)",
+      "answer": "SỞHỮU",
+      "keyCharIndex": 2,
+      "revealsTileIndex": 1,
       "points": 10
     },
     {
       "id": 3,
-      "question": "Lễ hội cầu mùa truyền thống tiêu biểu của đồng bào Tây Nguyên?",
-      "answer": "ĐÂMTRÂU",
-      "keyCharIndex": 6,
+      "question": "Hình thức sản xuất chủ yếu bằng tay với công cụ thô sơ, năng suất chưa cao trong giai đoạn đầu phát triển? (7 chữ cái)",
+      "answer": "THỦCÔNG",
+      "keyCharIndex": 2,
+      "revealsTileIndex": 2,
       "points": 10
     },
     {
       "id": 4,
-      "question": "Thành phố sương mù, thủ phủ du lịch của tỉnh Lào Cai?",
-      "answer": "SAPA",
+      "question": "Hệ thống chỉ tiêu kinh tế - xã hội được cơ quan nhà nước ấn định từ trên xuống trong nền kinh tế tập trung trước đây? (7 chữ cái)",
+      "answer": "KẾHOẠCH",
       "keyCharIndex": 2,
+      "revealsTileIndex": 3,
       "points": 10
     },
     {
       "id": 5,
-      "question": "Loài hoa đặc trưng nở rộ vào cuối thu trên các triền núi đá phía Bắc?",
-      "answer": "TAMAUGIAC",
-      "keyCharIndex": 3,
+      "question": "Công cuộc cải cách toàn diện được khởi xướng từ Đại hội Đảng lần thứ VI (1986), mở đường cho kinh tế thị trường? (6 chữ cái)",
+      "answer": "ĐỔIMỚI",
+      "keyCharIndex": 1,
+      "revealsTileIndex": 4,
       "points": 10
     },
     {
       "id": 6,
-      "question": "Trang phục truyền thống của phụ nữ người Thái có gắn hàng khuy bạc?",
-      "answer": "ÁOCỎM",
+      "question": "Động từ thể hiện việc xóa bỏ xiềng xích, giải trừ áp bức hoặc giải phóng mọi tiềm năng của lực lượng sản xuất? (9 chữ cái)",
+      "answer": "GIẢIPHÓNG",
       "keyCharIndex": 4,
+      "revealsTileIndex": 5,
       "points": 10
     }
   ]

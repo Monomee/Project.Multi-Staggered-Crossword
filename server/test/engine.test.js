@@ -1,16 +1,19 @@
 import { ObstacleEngine } from '../src/games/ObstacleEngine.js';
 
-console.log('--- BẮT ĐẦU KIỂM THỬ STATE MACHINE & BUZZER ---');
+console.log('--- BẮT ĐẦU KIỂM THỬ STATE MACHINE, 6 HÀNG Ô CHỮ & MẢNH GHÉP ẢNH BÍ MẬT 3x2 ---');
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function runTests() {
   const engine = new ObstacleEngine();
 
-  // 1. Kiểm tra nạp dữ liệu
+  // 1. Kiểm tra nạp dữ liệu: 6 câu hỏi, từ khóa PHÙHỢP, ảnh bí mật 3x2 (6 ô)
   console.assert(engine.rows.length === 6, 'Phải có 6 hàng câu hỏi');
-  console.assert(engine.verticalWord.keyword === 'THỔCẨM', 'Từ khóa phải là THỔCẨM');
-  console.log('✓ Nạp dữ liệu câu hỏi thành công.');
+  console.assert(engine.verticalWord.keyword === 'PHÙHỢP', 'Từ khóa phải là PHÙHỢP');
+  console.assert(engine.totalTiles === 6, 'Tổng số mảnh ghép ảnh bí mật phải là 6 (lưới 3x2)');
+  console.assert(engine.revealedTiles.size === 0, 'Ban đầu chưa có mảnh ghép nào được mở');
+  console.assert(engine.rows[5].revealsTileIndex === 5, 'Hàng 6 phải có revealsTileIndex = 5');
+  console.log('✓ Nạp dữ liệu 6 câu hỏi, từ khóa PHÙHỢP và tổng số 6 ô ảnh thành công.');
 
   // 2. Thêm người chơi
   const p1 = engine.joinPlayer({ playerId: 'p-1', playerName: 'Nguyễn Văn A', socketId: 's1' });
@@ -76,12 +79,32 @@ async function runTests() {
   console.assert(!spam2.success, 'Spam liên tiếp phải bị Server chặn');
   console.log('✓ Server-side Rate Limit chống spam touch hoạt động chuẩn xác.');
 
-  // 10. Kiểm tra Reset Game dọn sạch người chơi cũ (Trò chơi mới tinh 100%)
+  // 10. KIỂM THỬ MẢNH GHÉP ẢNH BÍ MẬT KHI DUYỆT ĐÚNG HÀNG 6 -> Ô index 5 chuyển sang revealed
+  engine.selectRow(6);
+  const judgeRow6 = engine.judgeRow(6, true, 'p-1');
+  console.assert(judgeRow6.success === true, 'Duyệt hàng 6 thành công');
+  console.assert(engine.revealedTiles.has(5), 'Ô index 5 phải chuyển sang revealed khi duyệt đúng hàng 6');
+  console.assert(judgeRow6.revealedTiles.includes(5), 'Payload trả về của judgeRow phải chứa ô index 5');
+  console.assert(engine.rows[5].isRevealed === true, 'Hàng 6 phải được đánh dấu isRevealed = true');
+  console.log('✓ Duyệt đúng hàng 6 -> Ô mảnh ghép index 5 chuyển sang revealed thành công.');
+
+  // 11. KIỂM THỬ DUYỆT ĐÚNG HÀNG DỌC -> CẢ 6 Ô TỪ 0 ĐẾN 5 ĐỀU ĐƯỢC MỞ
+  const judgeVerticalCorrect = engine.judgeVertical('p-1', true);
+  console.assert(judgeVerticalCorrect.solved === true, 'Chướng ngại vật đã được giải');
+  console.assert(engine.revealedTiles.size === 6, 'Cả 6 ô ảnh bí mật phải được mở đầy đủ');
+  for (let i = 0; i < 6; i++) {
+    console.assert(engine.revealedTiles.has(i), `Ô ảnh mảnh ghép index ${i} phải được mở`);
+  }
+  console.assert(engine.rows.every(r => r.isRevealed), 'Tất cả 6 hàng ngang đều được mở khi giải xong hàng dọc');
+  console.log('✓ Duyệt đúng hàng dọc -> Mở toàn bộ 6 ô mảnh ghép (0 đến 5) và toàn bộ hàng ngang thành công.');
+
+  // 12. Kiểm tra Reset Game dọn sạch người chơi cũ & reset các ô ảnh (Trò chơi mới tinh 100%)
   engine.resetGame();
   console.assert(engine.players.size === 0, 'Phải dọn sạch 100% người chơi cũ');
   console.assert(engine.rows.every(r => !r.isRevealed), 'Tất cả các hàng phải chưa mở');
+  console.assert(engine.revealedTiles.size === 0, 'Tất cả mảnh ghép ảnh phải được che kín');
   console.assert(engine.currentRowId === null, 'currentRowId phải là null');
-  console.log('✓ Reset Game đưa phòng về trạng thái trò chơi mới tinh 100%.');
+  console.log('✓ Reset Game đưa phòng về trạng thái trò chơi mới tinh 100% (reset cả ô ảnh bí mật).');
 
   console.log('\n=== TẤT CẢ CÁC KIỂM THỬ SERVER ĐÃ VƯỢT QUA 100%! ===');
 }

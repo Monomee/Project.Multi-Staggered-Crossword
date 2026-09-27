@@ -23,6 +23,7 @@ import { sounds } from './utils/audio';
 import { CrosswordBoard } from './components/host/CrosswordBoard';
 import { HostControls } from './components/host/HostControls';
 import { BuzzQueueList } from './components/host/BuzzQueueList';
+import { ImagePuzzleBoard } from './components/host/ImagePuzzleBoard';
 
 import { QuestionViewer } from './components/player/QuestionViewer';
 import { RowBuzzer } from './components/player/RowBuzzer';
@@ -387,6 +388,12 @@ export default function App() {
         ) : role === 'host' ? (
           /* MÀN HÌNH BÀN CỜ & ĐIỀU KHIỂN CHO HOST */
           <div className="space-y-6">
+            {/* Hình ảnh bí mật chia lưới 3x2 (6 mảnh ghép) */}
+            <ImagePuzzleBoard
+              secretImage={gameState?.secretImage}
+              revealedTiles={gameState?.revealedTiles || []}
+            />
+
             <CrosswordBoard
               gameState={gameState}
               onSelectRow={selectRow}

@@ -15,7 +15,10 @@ export class ObstacleEngine {
     this.buzzer = new BuzzerManager();
     this.players = new Map(); // playerId => { id, name, score, isEliminated, isConnected, socketId }
     this.roomCode = 'OLYMPIA';
-    this.COL_ANCHOR = 12;
+    this.COL_ANCHOR = 5;
+    this.secretImage = { url: 'https://picsum.photos/1200/800', grid: { cols: 3, rows: 2 } };
+    this.totalTiles = 6;
+    this.revealedTiles = new Set();
 
     this.defaultGameDataPath = gameDataPath || path.resolve(__dirname, '../../../data/game-sample.json');
     this.loadGameData(this.defaultGameDataPath);
@@ -31,6 +34,13 @@ export class ObstacleEngine {
       const parsed = JSON.parse(raw);
 
       this.title = parsed.title || 'VƯỢT CHƯỚNG NGẠI VẬT';
+      this.secretImage = parsed.secretImage || {
+        url: 'https://picsum.photos/1200/800',
+        grid: { cols: 3, rows: 2 }
+      };
+      this.totalTiles = (this.secretImage?.grid?.cols || 3) * (this.secretImage?.grid?.rows || 2);
+      this.revealedTiles = new Set();
+
       this.verticalWord = {
         keyword: (parsed.verticalWord?.keyword || '').toUpperCase(),
         question: parsed.verticalWord?.question || '',
@@ -42,6 +52,7 @@ export class ObstacleEngine {
         question: row.question,
         answer: (row.answer || '').toUpperCase(),
         keyCharIndex: Number(row.keyCharIndex),
+        revealsTileIndex: row.revealsTileIndex != null ? Number(row.revealsTileIndex) : null,
         points: row.points || 10,
         isRevealed: false
       }));
@@ -53,7 +64,10 @@ export class ObstacleEngine {
       console.error('Lỗi khi nạp dữ liệu game:', err);
       // Dữ liệu fallback dự phòng
       this.title = 'VƯỢT CHƯỚNG NGẠI VẬT';
-      this.verticalWord = { keyword: 'VIỆTNAM', question: 'Tên đất nước thân yêu', isRevealed: false };
+      this.secretImage = { url: 'https://picsum.photos/1200/800', grid: { cols: 3, rows: 2 } };
+      this.totalTiles = 6;
+      this.revealedTiles = new Set();
+      this.verticalWord = { keyword: 'PHÙHỢP', question: 'Tên từ khóa hàng dọc', isRevealed: false };
       this.rows = [];
       this.currentRowId = null;
       this.verticalSolved = false;
@@ -158,67 +172,112 @@ export class ObstacleEngine {
   }
 
   /**
-   * Host chấm điểm câu trả lời
-   * @param {Object} param0
-   * @param {string} param0.playerId
-   * @param {'ROW'|'VERTICAL'} param0.type
-   * @param {boolean} param0.isCorrect
+   * Chấm điểm hàng ngang: Nếu đúng, mở hàng và mở mảnh ghép ảnh bí mật tương ứng (revealsTileIndex)
    */
-  judgeResult({ playerId, type, isCorrect }) {
-    const player = this.players.get(playerId);
+  judgeRow(rowId, isCorrect, playerId = null) {
+    const id = Number(rowId);
+    const row = this.rows.find(r => r.id === id);
+    const player = playerId ? this.players.get(playerId) : null;
 
-    if (type === 'ROW') {
-      const currentRow = this.rows.find(r => r.id === this.currentRowId);
-      if (isCorrect) {
-        if (player) {
-          player.score += (currentRow ? currentRow.points : 10);
+    if (isCorrect) {
+      if (player) {
+        player.score += (row ? row.points : 10);
+      }
+      if (row) {
+        row.isRevealed = true;
+        if (row.revealsTileIndex != null) {
+          this.revealedTiles.add(Number(row.revealsTileIndex));
         }
-        if (currentRow) {
-          currentRow.isRevealed = true;
-        }
-        // Khóa chuông và xóa hàng đợi
-        this.buzzer.setRowOpen(false);
-        this.buzzer.resetRowQueue();
-      } else {
-        // Sai hàng ngang: xóa người này khỏi queue để người sau có cơ hội
+      }
+      // Khóa chuông và xóa hàng đợi
+      this.buzzer.setRowOpen(false);
+      this.buzzer.resetRowQueue();
+    } else {
+      if (playerId) {
         this.buzzer.dismissBuzz(playerId, 'ROW');
       }
-      return { success: true, isCorrect, player, row: currentRow };
+    }
+
+    return {
+      success: true,
+      isCorrect,
+      player,
+      row,
+      revealedTiles: Array.from(this.revealedTiles)
+    };
+  }
+
+  /**
+   * Chấm điểm từ khóa hàng dọc (Chướng ngại vật): Nếu đúng, mở toàn bộ các ô ảnh (0 -> totalTiles - 1)
+   */
+  judgeVertical(playerId, isCorrect) {
+    const player = this.players.get(playerId);
+
+    if (isCorrect) {
+      if (player) {
+        const unrevealedRows = this.rows.filter(r => !r.isRevealed).length;
+        const pointsEarned = Math.max(20, 20 + unrevealedRows * 10);
+        player.score += pointsEarned;
+      }
+
+      this.verticalSolved = true;
+      this.verticalWinner = player ? { playerId: player.id, name: player.name } : null;
+      this.verticalWord.isRevealed = true;
+
+      // Mở toàn bộ các hàng ngang còn lại
+      this.rows.forEach(r => {
+        r.isRevealed = true;
+        if (r.revealsTileIndex != null) {
+          this.revealedTiles.add(Number(r.revealsTileIndex));
+        }
+      });
+
+      // Mở toàn bộ các ô ảnh bí mật (0 đến totalTiles - 1)
+      for (let i = 0; i < this.totalTiles; i++) {
+        this.revealedTiles.add(i);
+      }
+
+      // Khóa toàn bộ chuông
+      this.buzzer.setRowOpen(false);
+      this.buzzer.setVerticalOpen(false);
+      this.buzzer.resetRowQueue();
+      this.buzzer.resetVerticalQueue();
+
+      return {
+        success: true,
+        isCorrect: true,
+        player,
+        solved: true,
+        revealedTiles: Array.from(this.revealedTiles)
+      };
+    } else {
+      // Permadeath: Trả lời sai hàng dọc -> Bị loại khỏi phần thi này!
+      if (player) {
+        player.isEliminated = true;
+      }
+      this.buzzer.removePlayer(playerId);
+
+      return {
+        success: true,
+        isCorrect: false,
+        player,
+        eliminated: true,
+        revealedTiles: Array.from(this.revealedTiles)
+      };
+    }
+  }
+
+  /**
+   * Host chấm điểm câu trả lời (điều phối judgeRow hoặc judgeVertical)
+   */
+  judgeResult({ playerId, type, isCorrect, rowId }) {
+    if (type === 'ROW') {
+      const targetRowId = rowId || this.currentRowId;
+      return this.judgeRow(targetRowId, isCorrect, playerId);
     }
 
     if (type === 'VERTICAL') {
-      if (isCorrect) {
-        // Đúng từ khóa chướng ngại vật!
-        if (player) {
-          // Tính điểm: Olympia thường cho 60 điểm nếu chưa mở hàng nào, giảm dần theo số hàng đã mở
-          const unrevealedRows = this.rows.filter(r => !r.isRevealed).length;
-          const pointsEarned = Math.max(20, 20 + unrevealedRows * 10);
-          player.score += pointsEarned;
-        }
-
-        this.verticalSolved = true;
-        this.verticalWinner = player ? { playerId: player.id, name: player.name } : null;
-        this.verticalWord.isRevealed = true;
-
-        // Mở toàn bộ các hàng ngang còn lại
-        this.rows.forEach(r => { r.isRevealed = true; });
-
-        // Khóa toàn bộ chuông
-        this.buzzer.setRowOpen(false);
-        this.buzzer.setVerticalOpen(false);
-        this.buzzer.resetRowQueue();
-        this.buzzer.resetVerticalQueue();
-
-        return { success: true, isCorrect: true, player, solved: true };
-      } else {
-        // Permadeath: Trả lời sai hàng dọc -> Bị loại khỏi phần thi này!
-        if (player) {
-          player.isEliminated = true;
-        }
-        this.buzzer.removePlayer(playerId);
-
-        return { success: true, isCorrect: false, player, eliminated: true };
-      }
+      return this.judgeVertical(playerId, isCorrect);
     }
 
     return { success: false, error: 'Loại câu hỏi không hợp lệ!' };
@@ -245,13 +304,16 @@ export class ObstacleEngine {
   }
 
   /**
-   * Host chủ động mở đáp án 1 hàng ngang (nếu không ai trả lời đúng)
+   * Host chủ động mở đáp án 1 hàng ngang (nếu không ai trả lời đúng) -> mở mảnh ghép ảnh tương ứng
    */
   revealRow(rowId) {
     const id = Number(rowId);
     const row = this.rows.find(r => r.id === id);
     if (row) {
       row.isRevealed = true;
+      if (row.revealsTileIndex != null) {
+        this.revealedTiles.add(Number(row.revealsTileIndex));
+      }
       this.buzzer.setRowOpen(false);
       this.buzzer.resetRowQueue();
       return true;
@@ -260,12 +322,20 @@ export class ObstacleEngine {
   }
 
   /**
-   * Host chủ động mở từ khóa hàng dọc
+   * Host chủ động mở từ khóa hàng dọc -> mở toàn bộ ảnh bí mật
    */
   revealVertical() {
     this.verticalSolved = true;
     this.verticalWord.isRevealed = true;
-    this.rows.forEach(r => { r.isRevealed = true; });
+    this.rows.forEach(r => {
+      r.isRevealed = true;
+      if (r.revealsTileIndex != null) {
+        this.revealedTiles.add(Number(r.revealsTileIndex));
+      }
+    });
+    for (let i = 0; i < this.totalTiles; i++) {
+      this.revealedTiles.add(i);
+    }
     this.buzzer.setRowOpen(false);
     this.buzzer.setVerticalOpen(false);
     return true;
@@ -276,6 +346,7 @@ export class ObstacleEngine {
    */
   resetGame() {
     this.loadGameData(this.defaultGameDataPath);
+    this.revealedTiles = new Set();
     this.players.clear(); // XÓA SẠCH người chơi cũ, phòng trở thành trò chơi mới 100%
     this.buzzer.resetAll();
   }
@@ -288,6 +359,9 @@ export class ObstacleEngine {
 
     return {
       title: this.title,
+      secretImage: this.secretImage,
+      totalTiles: this.totalTiles,
+      revealedTiles: Array.from(this.revealedTiles),
       verticalWord: {
         keywordLength: this.verticalWord.keyword.length,
         question: this.verticalWord.question,
@@ -300,6 +374,7 @@ export class ObstacleEngine {
         question: row.question,
         charCount: row.answer.length,
         keyCharIndex: row.keyCharIndex,
+        revealsTileIndex: row.revealsTileIndex,
         points: row.points,
         isRevealed: row.isRevealed,
         // Chỉ gửi đáp án đầy đủ khi hàng đã được mở

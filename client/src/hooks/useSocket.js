@@ -242,6 +242,10 @@ export function useSocket() {
       sounds.playCorrect();
     });
 
+    s.on('game:tiles_updated', ({ revealedTiles }) => {
+      setGameState((prev) => (prev ? { ...prev, revealedTiles } : prev));
+    });
+
     s.on('game:player_eliminated', (data) => {
       if (data.playerId === playerId) {
         sounds.playWrong();
