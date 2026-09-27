@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check, QrCode, ExternalLink, Smartphone } from 'lucide-react';
 
-export function QRCodeModal({ roomCode, onClose }) {
+export function QRCodeModal({ roomCode, onClose, isHost = false, hostToken = null }) {
   const [copied, setCopied] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   // Link tham gia trực tiếp chứa param ?room=XXXX
   const joinUrl = `${window.location.origin}/?room=${roomCode}`;
@@ -12,6 +13,14 @@ export function QRCodeModal({ roomCode, onClose }) {
     navigator.clipboard.writeText(joinUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  };
+
+  const handleCopyHostToken = () => {
+    if (!hostToken) return;
+    navigator.clipboard.writeText(hostToken).then(() => {
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2500);
     }).catch(() => {});
   };
 
@@ -80,6 +89,29 @@ export function QRCodeModal({ roomCode, onClose }) {
             <Smartphone className="w-3.5 h-3.5 text-amber-400" />
             <span>Thí sinh tự động điền mã phòng sau khi quét</span>
           </div>
+
+          {/* Dành riêng cho Host: Hiển thị Host Token để bảo lưu phiên */}
+          {isHost && hostToken && (
+            <div className="mt-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-left space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-amber-400 uppercase">
+                <span>Khóa Host Token (Khôi phục quyền Host):</span>
+                <button
+                  type="button"
+                  onClick={handleCopyHostToken}
+                  className="text-[10px] text-amber-300 hover:text-white underline cursor-pointer flex items-center gap-1"
+                >
+                  {copiedToken ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedToken ? 'Đã sao chép!' : 'Chép Token'}</span>
+                </button>
+              </div>
+              <div className="font-mono text-[11px] text-slate-300 bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800 break-all select-all">
+                {hostToken}
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Lưu mã token này để có thể bấm "Vào lại phòng" từ thiết bị khác hoặc khi đổi trình duyệt.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -62,18 +62,58 @@ export const roomStorage = {
       localStorage.removeItem('olym_host_session');
     } catch {}
   },
-  clear(code) {
+  clear(code, keepHost = false) {
     try {
       if (code) {
         localStorage.removeItem(`olym_auth_${code.toUpperCase()}`);
-        localStorage.removeItem(`olym_host_${code.toUpperCase()}`);
+        if (!keepHost) {
+          localStorage.removeItem(`olym_host_${code.toUpperCase()}`);
+        }
       }
       localStorage.removeItem('olym_last_room');
+      if (!keepHost) {
+        const session = this.getHostSession();
+        if (session && (!code || session.roomCode === code?.toUpperCase())) {
+          localStorage.removeItem('olym_host_session');
+        }
+      }
+    } catch {}
+  },
+  clearHost(code) {
+    try {
+      if (code) {
+        localStorage.removeItem(`olym_host_${code.toUpperCase()}`);
+      }
       const session = this.getHostSession();
       if (session && (!code || session.roomCode === code?.toUpperCase())) {
         localStorage.removeItem('olym_host_session');
       }
     } catch {}
+  },
+  getSavedHostRooms() {
+    const list = [];
+    const seen = new Set();
+    const session = this.getHostSession();
+    if (session?.roomCode && session?.hostToken) {
+      list.push({ roomCode: session.roomCode.toUpperCase(), hostToken: session.hostToken });
+      seen.add(session.roomCode.toUpperCase());
+    }
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('olym_host_') && key !== 'olym_host_session') {
+          const roomCode = key.replace('olym_host_', '').toUpperCase();
+          if (!seen.has(roomCode)) {
+            const data = this.getHost(roomCode);
+            if (data?.hostToken) {
+              list.push({ roomCode, hostToken: data.hostToken });
+              seen.add(roomCode);
+            }
+          }
+        }
+      }
+    } catch {}
+    return list;
   },
   getLastRoom() {
     try {
@@ -380,13 +420,13 @@ export function useSocket() {
     }
   }, [socket, playerId]);
 
-  // Rời phòng, xóa session để đăng nhập mới hoàn toàn
-  const leaveRoom = useCallback(() => {
+  // Rời phòng, nếu là host rời tạm về trang chủ thì bảo lưu token để có thể vào lại
+  const leaveRoom = useCallback((keepHost = true) => {
     if (roomCode) {
-      roomStorage.clear(roomCode);
+      roomStorage.clear(roomCode, keepHost || role === 'host');
     }
     window.location.href = window.location.pathname; // xóa cả query params
-  }, [roomCode]);
+  }, [roomCode, role]);
 
   // Thí sinh bấm chuông (Row hoặc Vertical)
   const buzz = useCallback((type) => {
@@ -474,8 +514,13 @@ export function useSocket() {
     const hostSession = roomStorage.getHostSession();
     const c = (targetCode || hostSession?.roomCode || roomCode || '').trim().toUpperCase();
     const t = token || hostSession?.hostToken || roomStorage.getHost(c)?.hostToken;
-    if (!c || !t) {
-      setJoinError('Không tìm thấy thông tin phiên Host hợp lệ!');
+    if (!c) {
+      setJoinError('Vui lòng nhập mã phòng hợp lệ!');
+      return;
+    }
+    if (!t) {
+      // Nếu không có token trong bộ nhớ, thử gửi join_room với vai trò host
+      socket.emit('join_room', { roomCode: c, role: 'host' });
       return;
     }
     socket.emit('host:reconnect', { roomCode: c, hostToken: t });

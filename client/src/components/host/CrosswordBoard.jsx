@@ -11,7 +11,7 @@ import { Sparkles, Trophy, CheckCircle2 } from 'lucide-react';
  *   bg-amber-500/20 border-amber-400 text-amber-300 font-extrabold
  * - Mở ô khi hàng được duyệt đúng hoặc hàng dọc được giải thành công.
  */
-export function CrosswordBoard({ gameState, onSelectRow }) {
+export function CrosswordBoard({ gameState, onSelectRow, hideTitle = false }) {
   if (!gameState || !gameState.rows) {
     return (
       <div className="flex items-center justify-center p-12 text-slate-400">
@@ -25,35 +25,41 @@ export function CrosswordBoard({ gameState, onSelectRow }) {
   const TOTAL_COLS = 12; // 12 cột chuẩn, đảm bảo đủ khoảng lùi và độ dài từ (tối đa 9 ký tự)
 
   return (
-    <div className="w-full flex flex-col items-center">
-      {/* Tiêu đề & Trạng thái Chướng ngại vật */}
-      <div className="text-center mb-6">
-        <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2 inline-block">
-          Phần thi Vượt Chướng Ngại Vật
-        </span>
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-md">
-          {gameState.title || 'BƯỚC NGOẶT ĐỔI MỚI VÀ PHÁT TRIỂN KINH TẾ'}
-        </h1>
+    <div className="w-full flex flex-col items-center h-full">
+      {/* Tiêu đề & Trạng thái Chướng ngại vật (nếu không ẩn) */}
+      {!hideTitle && (
+        <div className="text-center mb-6">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2 inline-block">
+            Phần thi Vượt Chướng Ngại Vật
+          </span>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-md">
+            {gameState.title || 'BƯỚC NGOẶT ĐỔI MỚI VÀ PHÁT TRIỂN KINH TẾ'}
+          </h1>
 
-        {verticalSolved && (
-          <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-sm animate-bounce shadow-lg shadow-emerald-500/10">
-            <Trophy className="w-4 h-4 text-emerald-400" />
-            CHƯỚNG NGẠI VẬT "PHÙ HỢP" ĐÃ ĐƯỢC GIẢI! {verticalWinner?.name ? `(${verticalWinner.name})` : ''}
-          </div>
-        )}
-      </div>
+          {verticalSolved && (
+            <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-sm animate-bounce shadow-lg shadow-emerald-500/10">
+              <Trophy className="w-4 h-4 text-emerald-400" />
+              CHƯỚNG NGẠI VẬT "PHÙ HỢP" ĐÃ ĐƯỢC GIẢI! {verticalWinner?.name ? `(${verticalWinner.name})` : ''}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Khung Bàn cờ Crossword */}
-      <div className="w-full max-w-5xl overflow-x-auto p-4 md:p-6 rounded-2xl glass-panel-elevated relative">
+      <div className="w-full h-full overflow-x-auto p-4 md:p-5 rounded-2xl glass-panel-elevated relative border border-slate-700/80">
         {/* Đường chỉ dẫn trục dọc ANCHOR_COL (Cột 5: Từ khóa PHÙ HỢP) */}
-        <div className="text-xs text-amber-400/90 font-bold uppercase tracking-wider mb-4 flex items-center justify-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-          <span>Trục Dọc Từ Khóa: Cột {ANCHOR_COL}</span>
-          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+        <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-xs font-bold uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 text-amber-400">
+            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+            <span>Trục Dọc Từ Khóa: Cột {ANCHOR_COL}</span>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono font-bold">
+            {rows.length} Hàng ngang
+          </span>
         </div>
 
         {/* Danh sách các hàng ngang */}
-        <div className="flex flex-col gap-2.5 min-w-[700px]">
+        <div className="flex flex-col gap-2 min-w-[580px] lg:min-w-0">
           {rows.map((row) => {
             const isSelected = row.id === currentRowId;
             const startCol = ANCHOR_COL - row.keyCharIndex;
@@ -69,7 +75,7 @@ export function CrosswordBoard({ gameState, onSelectRow }) {
                 }`}
               >
                 {/* Số thứ tự hàng & Trạng thái mở */}
-                <div className="flex items-center justify-between w-24 flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700/60 shadow-inner">
+                <div className="flex items-center justify-between w-20 sm:w-22 md:w-24 flex-shrink-0 px-2 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700/60 shadow-inner">
                   <span className={`text-xs font-black ${isSelected ? 'text-amber-400' : 'text-slate-300'}`}>
                     HÀNG {row.id}
                   </span>
@@ -84,14 +90,14 @@ export function CrosswordBoard({ gameState, onSelectRow }) {
 
                 {/* Container Grid bao bọc toàn bộ cột (12 cột) */}
                 <div
-                  className="flex-1 grid gap-1.5 items-center justify-start"
+                  className="flex-1 grid gap-1 sm:gap-1.5 items-center justify-start"
                   style={{
-                    gridTemplateColumns: `repeat(${TOTAL_COLS}, minmax(36px, 44px))`
+                    gridTemplateColumns: `repeat(${TOTAL_COLS}, minmax(30px, 42px))`
                   }}
                 >
                   {/* Thẻ bọc ngoài của hàng bắt đầu chính xác tại startCol = ANCHOR_COL - keyCharIndex */}
                   <div
-                    className="flex items-center gap-1.5"
+                    className="flex items-center gap-1 sm:gap-1.5"
                     style={{
                       gridColumnStart: startCol,
                       gridColumnEnd: `span ${row.charCount}`
@@ -107,7 +113,7 @@ export function CrosswordBoard({ gameState, onSelectRow }) {
                       return (
                         <div
                           key={charIdx}
-                          className="perspective-1000 w-9 h-10 md:w-11 md:h-12 flex-shrink-0"
+                          className="perspective-1000 w-7.5 h-8.5 sm:w-9 sm:h-10 md:w-9.5 md:h-10.5 xl:w-10 xl:h-11 flex-shrink-0"
                         >
                           <div
                             className={`tile-inner relative w-full h-full rounded-lg text-center select-none shadow-md transition-all duration-500 ${

@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   Trophy,
   LogOut,
+  LogIn,
   QrCode,
   Play,
   Sparkles,
@@ -79,9 +80,19 @@ export default function App() {
   const [inputName, setInputName] = useState(() => savedAuth?.playerName || playerName || '');
   const [selectedRole, setSelectedRole] = useState(() => (queryRoom ? 'player' : (savedHost ? 'host' : (savedAuth?.role || 'player'))));
   const [hasJoined, setHasJoined] = useState(() => Boolean(savedHost || savedAuth));
+  const [manualHostToken, setManualHostToken] = useState('');
+  const [showManualToken, setShowManualToken] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showTerminateModal, setShowTerminateModal] = useState(false);
+
+  const currentTargetCode = inputRoomCode.trim().toUpperCase();
+  const savedHostForCurrent = roomStorage.getHost(currentTargetCode);
+  const hasSavedHostForCurrent = Boolean(
+    savedHostForCurrent?.hostToken ||
+    (hostSession?.roomCode === currentTargetCode && hostSession?.hostToken)
+  );
+  const savedHostRooms = roomStorage.getSavedHostRooms();
 
   const nameInputRef = useRef(null);
 
@@ -113,14 +124,36 @@ export default function App() {
     sounds.setMuted(nextMuted);
   };
 
-  // Host tạo phòng
-  const handleHostCreateRoom = (customCode = null) => {
+  // Host tạo phòng mới
+  const handleHostCreateRoom = (customCode = null, isRandom = false) => {
     sounds.init();
-    createRoom(customCode || inputRoomCode);
+    if (isRandom) {
+      createRoom(null);
+    } else {
+      createRoom(customCode || inputRoomCode || null);
+    }
     setHasJoined(true);
   };
 
-  // Người dùng tham gia phòng
+  // Host vào lại phòng đã tạo (Host Reconnect)
+  const handleHostRejoin = (targetCode = null) => {
+    sounds.init();
+    const code = (targetCode || inputRoomCode || '').trim().toUpperCase();
+    if (!code) {
+      setJoinError('Vui lòng nhập mã phòng cần vào lại!');
+      return;
+    }
+    const token = manualHostToken.trim() || roomStorage.getHost(code)?.hostToken || (hostSession?.roomCode === code ? hostSession?.hostToken : null);
+    
+    if (token) {
+      reconnectHost(code, token);
+    } else {
+      joinRoom(code, 'Ban Tổ Chức', 'host');
+    }
+    setHasJoined(true);
+  };
+
+  // Người dùng tham gia phòng (Submit form)
   const handleJoin = (e) => {
     e.preventDefault();
     sounds.init();
@@ -129,12 +162,29 @@ export default function App() {
     const finalName = inputName.trim() || (selectedRole === 'host' ? 'Ban Tổ Chức' : 'Thí sinh');
 
     if (selectedRole === 'host') {
-      // Nếu host nhập mã phòng, thử kết nối hoặc tạo mới
-      joinRoom(targetRoom, finalName, 'host');
+      const token = manualHostToken.trim() || roomStorage.getHost(targetRoom)?.hostToken || (hostSession?.roomCode === targetRoom ? hostSession?.hostToken : null);
+      if (token) {
+        reconnectHost(targetRoom, token);
+      } else {
+        joinRoom(targetRoom, finalName, 'host');
+      }
     } else {
       joinRoom(targetRoom, finalName, 'player');
     }
     setHasJoined(true);
+  };
+
+  // Rời phòng an toàn: Host tạm rời về trang chủ mà không hủy phòng hay mất token
+  const handleExitGame = () => {
+    if (role === 'host') {
+      if (window.confirm('Bạn muốn tạm rời màn hình Host về trang chủ? Phòng thi đấu vẫn tiếp tục mở để thí sinh chờ, và bạn có thể bấm "Vào lại phòng" bất kỳ lúc nào.')) {
+        setHasJoined(false);
+      }
+    } else {
+      if (window.confirm('Bạn có chắc chắn muốn rời phòng thi đấu này?')) {
+        leaveRoom();
+      }
+    }
   };
 
   const handleToggleFullScreen = () => {
@@ -254,7 +304,13 @@ export default function App() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
                 <span>Mã phòng thi đấu:</span>
-                {queryRoom && (
+                {selectedRole === 'host' && hasSavedHostForCurrent && (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Đã lưu quyền Host
+                  </span>
+                )}
+                {queryRoom && selectedRole === 'player' && (
                   <span className="text-[10px] text-emerald-400 font-mono">Đã tự động điền từ QR</span>
                 )}
               </label>
@@ -267,6 +323,32 @@ export default function App() {
                 placeholder="VD: OLYM8"
                 className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-amber-400 placeholder-slate-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 text-base font-mono font-black tracking-widest uppercase text-center"
               />
+
+              {/* Danh sách các phòng Host đã tạo gần đây để bấm vào là chọn ngay */}
+              {selectedRole === 'host' && savedHostRooms.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] text-slate-400">
+                  <span className="font-semibold text-slate-400">Phòng Host của bạn:</span>
+                  {savedHostRooms.map((sr) => (
+                    <button
+                      key={sr.roomCode}
+                      type="button"
+                      onClick={() => {
+                        setInputRoomCode(sr.roomCode);
+                        handleHostRejoin(sr.roomCode);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg border font-mono font-black text-xs transition-all flex items-center gap-1 cursor-pointer ${
+                        inputRoomCode === sr.roomCode
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-300 ring-1 ring-amber-400/50'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-amber-400/50 hover:text-amber-300'
+                      }`}
+                      title={`Bấm để vào lại phòng ${sr.roomCode}`}
+                    >
+                      <span>{sr.roomCode}</span>
+                      <Play className="w-2.5 h-2.5 text-amber-400" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Nhập tên thí sinh */}
@@ -289,23 +371,84 @@ export default function App() {
 
             {/* Nút hành động */}
             {selectedRole === 'host' ? (
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2.5 pt-1">
+                {/* 1. NÚT VÀO LẠI CHÍNH PHÒNG CŨ CỦA MÌNH */}
                 <button
                   type="button"
-                  onClick={() => handleHostCreateRoom(inputRoomCode || 'OLYM8')}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-cyan-500/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  id="btn-rejoin-host"
+                  onClick={() => handleHostRejoin(inputRoomCode)}
+                  className={`w-full py-3.5 px-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    hasSavedHostForCurrent
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                      : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-cyan-600/25'
+                  }`}
+                  title="Vào lại phòng đang diễn ra với quyền điều khiển Host"
                 >
-                  <Tv className="w-4 h-4" />
-                  <span>Tạo phòng "{inputRoomCode || 'OLYM8'}" Mới</span>
+                  <LogIn className="w-4 h-4" />
+                  <span>
+                    {hasSavedHostForCurrent
+                      ? `Vào lại phòng "${inputRoomCode || 'OLYM8'}" (Khôi phục quyền Host)`
+                      : `Vào lại phòng "${inputRoomCode || 'OLYM8'}"`}
+                  </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleHostCreateRoom(null)}
-                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
-                >
-                  Tạo phòng ngẫu nhiên (5 ký tự)
-                </button>
+                <div className="relative flex py-0.5 items-center">
+                  <div className="flex-grow border-t border-slate-700/60"></div>
+                  <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-slate-500">Hoặc tạo phòng mới</span>
+                  <div className="flex-grow border-t border-slate-700/60"></div>
+                </div>
+
+                {/* 2. CÁC NÚT TẠO PHÒNG MỚI */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    id="btn-host-create-named"
+                    onClick={() => handleHostCreateRoom(inputRoomCode || 'OLYM8', false)}
+                    className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-cyan-500/50 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    title="Tạo mới phòng với mã đang nhập"
+                  >
+                    <Tv className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="truncate">Tạo mới "{inputRoomCode || 'OLYM8'}"</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-host-create-random"
+                    onClick={() => handleHostCreateRoom(null, true)}
+                    className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 border border-slate-700 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Tạo ngẫu nhiên</span>
+                  </button>
+                </div>
+
+                {/* Tùy chọn mở rộng: Nhập Token nếu vào từ thiết bị khác */}
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowManualToken(!showManualToken)}
+                    className="text-[11px] text-slate-400 hover:text-cyan-400 underline underline-offset-2 transition-colors cursor-pointer"
+                  >
+                    {showManualToken ? '▲ Ẩn nhập Host Token thủ công' : '▼ Bạn đổi thiết bị/trình duyệt? Nhập Host Token tại đây'}
+                  </button>
+                  {showManualToken && (
+                    <div className="mt-2 p-3 rounded-xl bg-slate-900/90 border border-slate-700 text-left space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase">
+                        Mã Host Token bí mật:
+                      </label>
+                      <input
+                        type="password"
+                        value={manualHostToken}
+                        onChange={(e) => setManualHostToken(e.target.value)}
+                        placeholder="Dán token Host đã copy trước đó..."
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400 text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        Token này được sinh ra khi tạo phòng và có thể copy trong modal Mã QR của Host.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <button
@@ -396,13 +539,9 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => {
-              if (window.confirm('Bạn có chắc chắn muốn rời phòng thi đấu này?')) {
-                leaveRoom();
-              }
-            }}
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-900/40 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 transition-colors"
-            title="Rời phòng"
+            onClick={handleExitGame}
+            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-900/40 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 transition-colors cursor-pointer"
+            title={role === 'host' ? 'Tạm rời về trang chủ (phòng vẫn mở để vào lại)' : 'Rời phòng'}
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -450,7 +589,7 @@ export default function App() {
       )}
 
       {/* 2. NỘI DUNG CHÍNH: LOBBY HOẶC GAME PLAYING */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
+      <main className="flex-1 w-full max-w-[1750px] mx-auto p-3 sm:p-4 md:p-6">
         {roomStatus === 'LOBBY' ? (
           /* MÀN HÌNH SẢNH CHỜ LOBBY CHO CẢ HOST & PLAYER */
           <LobbyView
@@ -464,16 +603,42 @@ export default function App() {
         ) : role === 'host' ? (
           /* MÀN HÌNH BÀN CỜ & ĐIỀU KHIỂN CHO HOST */
           <div className="space-y-6">
-            {/* Hình ảnh bí mật chia lưới 3x2 (6 mảnh ghép) */}
-            <ImagePuzzleBoard
-              secretImage={gameState?.secretImage}
-              revealedTiles={gameState?.revealedTiles || []}
-            />
+            {/* TIÊU ĐỀ CHÍNH CỦA TRÒ CHƠI CHO MÁY CHIẾU & HOST */}
+            <div className="text-center">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2 inline-block">
+                Phần thi Vượt Chướng Ngại Vật
+              </span>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-md uppercase">
+                {gameState?.title || 'BƯỚC NGOẶT ĐỔI MỚI VÀ PHÁT TRIỂN KINH TẾ'}
+              </h1>
 
-            <CrosswordBoard
-              gameState={gameState}
-              onSelectRow={selectRow}
-            />
+              {gameState?.verticalSolved && (
+                <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-sm animate-bounce shadow-lg shadow-emerald-500/10">
+                  <Trophy className="w-4 h-4 text-emerald-400" />
+                  CHƯỚNG NGẠI VẬT "PHÙ HỢP" ĐÃ ĐƯỢC GIẢI! {gameState?.verticalWinner?.name ? `(${gameState.verticalWinner.name})` : ''}
+                </div>
+              )}
+            </div>
+
+            {/* BỐ CỤC NGANG HÀNG: HÌNH ẢNH BÊN TRÁI, Ô CHỮ BÊN PHẢI */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* CỘT TRÁI: HÌNH ẢNH BÍ MẬT 3x2 */}
+              <div className="lg:col-span-5 w-full">
+                <ImagePuzzleBoard
+                  secretImage={gameState?.secretImage}
+                  revealedTiles={gameState?.revealedTiles || []}
+                />
+              </div>
+
+              {/* CỘT PHẢI: BÀN CỜ Ô CHỮ SO LE */}
+              <div className="lg:col-span-7 w-full">
+                <CrosswordBoard
+                  gameState={gameState}
+                  onSelectRow={selectRow}
+                  hideTitle={true}
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <BuzzQueueList
@@ -545,6 +710,8 @@ export default function App() {
         <QRCodeModal
           roomCode={activeRoomCode}
           onClose={() => setShowQRModal(false)}
+          isHost={role === 'host'}
+          hostToken={roomStorage.getHost(activeRoomCode)?.hostToken || hostSession?.hostToken}
         />
       )}
 
