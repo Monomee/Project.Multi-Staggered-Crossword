@@ -15,7 +15,7 @@
     {
       "id": 1,
       "question": "Hình thức phân phối hàng hóa, nhu yếu phẩm đặc trưng nhất của thời kỳ bao cấp trước năm 1986 là gì? (8 chữ cái)",
-      "answer": "TEMPHIẾU",
+      "answer": "TEMPHIEU",
       "keyCharIndex": 3,
       "revealsTileIndex": 0,
       "points": 10
@@ -23,7 +23,7 @@
     {
       "id": 2,
       "question": "Quyền năng cơ bản của công dân hoặc pháp nhân đối với tài sản, bao gồm quyền chiếm hữu, sử dụng và định đoạt? (5 chữ cái)",
-      "answer": "SỞHỮU",
+      "answer": "SOHUU",
       "keyCharIndex": 2,
       "revealsTileIndex": 1,
       "points": 10
@@ -31,7 +31,7 @@
     {
       "id": 3,
       "question": "Hình thức sản xuất chủ yếu bằng tay với công cụ thô sơ, năng suất chưa cao trong giai đoạn đầu phát triển? (7 chữ cái)",
-      "answer": "THỦCÔNG",
+      "answer": "THUCONG",
       "keyCharIndex": 2,
       "revealsTileIndex": 2,
       "points": 10
@@ -39,7 +39,7 @@
     {
       "id": 4,
       "question": "Hệ thống chỉ tiêu kinh tế - xã hội được cơ quan nhà nước ấn định từ trên xuống trong nền kinh tế tập trung trước đây? (7 chữ cái)",
-      "answer": "KẾHOẠCH",
+      "answer": "KEHOACH",
       "keyCharIndex": 2,
       "revealsTileIndex": 3,
       "points": 10
@@ -47,7 +47,7 @@
     {
       "id": 5,
       "question": "Công cuộc cải cách toàn diện được khởi xướng từ Đại hội Đảng lần thứ VI (1986), mở đường cho kinh tế thị trường? (6 chữ cái)",
-      "answer": "ĐỔIMỚI",
+      "answer": "DOIMOI",
       "keyCharIndex": 1,
       "revealsTileIndex": 4,
       "points": 10
@@ -55,7 +55,7 @@
     {
       "id": 6,
       "question": "Động từ thể hiện việc xóa bỏ xiềng xích, giải trừ áp bức hoặc giải phóng mọi tiềm năng của lực lượng sản xuất? (9 chữ cái)",
-      "answer": "GIẢIPHÓNG",
+      "answer": "GIAIPHONG",
       "keyCharIndex": 4,
       "revealsTileIndex": 5,
       "points": 10
